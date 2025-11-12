@@ -1,0 +1,99 @@
+# ============================================================================
+# 扩散模型实现框架 - 配置文件
+# ============================================================================
+# 本配置文件采用 YAML 格式，用于控制扩散模型的所有行为和超参数。
+# 通过修改此文件可以实现即插即用的算法切换，无需修改代码。
+
+# ----------------------------------------------------------------------------
+# 扩散模型配置
+# ----------------------------------------------------------------------------
+diffusion:
+  # 扩散算法实现类型 (四选一)
+  # - 'ddpm': 经典 DDPM 算法，基于 Markov 链的去噪过程
+  # - 'ddim': DDIM 算法，支持加速采样（非 Markov 过程）
+  # - 'sde_solver': 基于随机微分方程的连续时间建模
+  # - 'dpm_solver': 高阶 ODE 求解器，支持 10-20 步快速采样
+  implementation: 'ddpm'
+
+  # 总时间步数 (T)
+  # DDPM/DDIM: 通常使用 1000
+  # DPM-Solver: 可减少到 20-50 步
+  timesteps: 1000
+
+  # Beta 噪声调度参数
+  beta_start: 0.0001  # 初始噪声水平 (t=0)
+  beta_end: 0.02      # 最终噪声水平 (t=T)
+
+  # Beta 调度方案 (noise schedule)
+  # - 'linear': 线性调度，β_t 线性增长
+  # - 'cosine': 余弦调度，生成质量更好 (Improved DDPM)
+  beta_schedule: 'linear'
+
+  # DDIM 特定参数 (仅当 implementation='ddim' 时生效)
+  ddim:
+    eta: 0.0  # 随机性控制参数 (0=确定性采样, 1=DDPM等价)
+    skip_steps: 50  # 加速采样时的实际步数 (从 1000 跳到 50)
+
+  # DPM-Solver 特定参数 (仅当 implementation='dpm_solver' 时生效)
+  dpm_solver:
+    solver_order: 2  # 求解器阶数 (1/2/3)，阶数越高质量越好
+    prediction_type: 'epsilon'  # 预测类型: 'epsilon'(噪声) / 'sample'(数据)
+
+# ----------------------------------------------------------------------------
+# 噪声预测模型 (U-Net) 配置
+# ----------------------------------------------------------------------------
+model:
+  # 模型类型
+  # - 'simple_unet': 简化版 U-Net，用于快速测试
+  # - 'unet': 完整 U-Net，包含注意力机制和残差连接
+  type: 'simple_unet'
+
+  # 输入输出通道数
+  in_channels: 1   # 灰度图像为 1，RGB 图像为 3
+  out_channels: 1  # 预测噪声的通道数，通常与输入相同
+
+  # 完整 U-Net 特定参数 (仅当 type='unet' 时生效)
+  unet:
+    base_channels: 64  # 基础通道数
+    channel_multipliers: [1, 2, 4, 8]  # 每层通道数倍增系数
+    attention_resolutions: [16, 8]  # 在哪些分辨率层添加自注意力
+    num_residual_blocks: 2  # 每层的残差块数量
+    dropout: 0.1  # Dropout 概率
+
+  # 条件生成配置
+  condition:
+    # 条件类型
+    # - 'none': 无条件生成
+    # - 'class': 类别标签条件 (如 MNIST 的 10 个数字类别)
+    type: 'class'
+
+    # 类别条件特定参数 (仅当 type='class' 时生效)
+    num_classes: 10  # 类别数量 (如 MNIST 为 10)
+    embedding_dim: 128  # 类别嵌入维度
+
+# ----------------------------------------------------------------------------
+# 全局配置与训练超参数
+# ----------------------------------------------------------------------------
+global:
+  # 计算设备
+  # - 'cuda': 使用 GPU 加速 (推荐)
+  # - 'cpu': 使用 CPU (速度较慢)
+  device: 'cuda'
+
+  # 训练超参数
+  training:
+    batch_size: 16  # 批次大小
+    learning_rate: 0.0001  # 学习率 (Adam 优化器)
+    num_epochs: 100  # 训练轮数
+    gradient_clip: 1.0  # 梯度裁剪阈值
+
+  # 采样配置
+  sampling:
+    batch_size: 4  # 采样时的批次大小
+    save_interval: 10  # 每隔多少个 epoch 保存样本
+
+  # 日志与保存
+  logging:
+    log_interval: 100  # 每隔多少步打印日志
+    checkpoint_dir: './checkpoints'  # 模型保存路径
+    sample_dir: './samples'  # 生成样本保存路径
