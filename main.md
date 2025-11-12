@@ -278,7 +278,7 @@ ZCF为Claude Code扩展了命令系统，按任务类型选用，可显著提升
 
 - **准备工作**：
   1. 创建项目文件夹，例如“diffusion_model_implementations”
-  2. 确认项目需求和代码风格规范，分别保存为“[idea.md](https://github.com/HIT-SudoMaker/tutorials_for_claude_code/idea.md)”和“[coding_paradigm.md](https://github.com/HIT-SudoMaker/tutorials_for_claude_code/coding_paradigm.md)”
+  2. 确认项目需求和代码风格规范，分别保存为“[idea.md](https://github.com/HIT-SudoMaker/tutorials_for_claude_code/blob/master/diffusion_model_implementations/idea.md)”和“[coding_paradigm.md](https://github.com/HIT-SudoMaker/tutorials_for_claude_code/blob/master/diffusion_model_implementations/coding_paradigm.md)”
 
 - **启动CCR**：
   1. 打开Windows PowerShell终端，输入`npx zcf ccr`命令打开CCR管理页面
