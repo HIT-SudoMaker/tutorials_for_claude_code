@@ -2,3 +2,7 @@
 .claude/
 .spec-workflow/
 __pycache__/
+docs/superpowers/
+
+# 忽略文件
+CLAUDE.md

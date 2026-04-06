@@ -1,475 +1,243 @@
-"""
-DDIM (Denoising Diffusion Implicit Models) 算法实现。
-
-基于 Song et al. 2021 的 DDIM 论文，实现支持加速采样的扩散模型。
-DDIM 使用非 Markov 前向过程，允许跳步采样以显著减少生成步数。
-
-参考文献:
-    Song, J., Meng, C., & Ermon, S. (2021). Denoising diffusion implicit models.
-    In International Conference on Learning Representations (ICLR).
-"""
-
-from typing import Tuple, Optional, List
+from typing import Optional, Tuple
 import torch
 import torch.nn as nn
-import numpy as np
+from .ddpm import DDPM
 
 
 class DDIM(nn.Module):
     """
-    DDIM 扩散模型实现。
-
-    相比 DDPM，DDIM 的主要优势是支持确定性或半确定性的加速采样。
-    通过跳步采样（如从 1000 步跳到 50 步），可以在保持生成质量的同时大幅加速。
-
-    Args:
-        n_timesteps (int): 训练时的总扩散时间步数 T（通常为 1000）。
-        beta_start (float): 初始噪声水平 β_0。
-        beta_end (float): 最终噪声水平 β_T。
-        beta_schedule (str, optional): Beta 调度方案（'linear' 或 'cosine'）。
-            默认为 'linear'。
-        eta (float, optional): 随机性控制参数。
-            - eta=0: 确定性采样（DDIM）
-            - eta=1: 等价于 DDPM（完全随机）
-            - 0 < eta < 1: 半确定性采样
-            默认为 0.0（确定性）。
-        device (str, optional): 计算设备。默认为 'cuda'。
-
-    Attributes:
-        n_timesteps (int): 训练时的总时间步数。
-        eta (float): 随机性参数。
-        beta, alpha, alpha_bar: 与 DDPM 相同的系数。
-
-    Example:
-        >>> ddim = DDIM(n_timesteps=1000, eta=0.0)  # 确定性采样
-        >>> x_T = torch.randn(4, 1, 28, 28).cuda()
-        >>> # 使用 50 步而非 1000 步进行采样
-        >>> x_0 = ddim.reverse_sample_loop(x_T, condition, model, skip_steps=50)
+    支持确定性与随机性采样的子序列扩散采样器
     """
 
     def __init__(
         self,
-        n_timesteps: int,
+        timesteps: int,
         beta_start: float,
         beta_end: float,
-        beta_schedule: str = 'linear',
+        beta_schedule: str = "linear",
         eta: float = 0.0,
-        device: str = 'cuda'
+        steps: int = 50,
     ) -> None:
-        super().__init__()
-
-        self.n_timesteps = n_timesteps
-        self.eta = eta
-        self.device = torch.device(device if torch.cuda.is_available() else 'cpu')
-
-        # 使用与 DDPM 相同的 Beta 调度
-        if beta_schedule == 'linear':
-            self.beta = self._linear_beta_schedule(
-                beta_start, beta_end, n_timesteps
-            )
-        elif beta_schedule == 'cosine':
-            self.beta = self._cosine_beta_schedule(n_timesteps)
-        else:
-            raise ValueError(
-                f"不支持的 beta_schedule: {beta_schedule}。"
-                f"请使用 'linear' 或 'cosine'。"
-            )
-
-        # 预计算系数
-        self.alpha = 1.0 - self.beta
-        self.alpha_bar = torch.cumprod(self.alpha, dim=0)
-
-        # 前向过程系数（与 DDPM 相同）
-        self.sqrt_alpha_bar = torch.sqrt(self.alpha_bar)
-        self.sqrt_one_minus_alpha_bar = torch.sqrt(1.0 - self.alpha_bar)
-
-        # 移至设备
-        self.beta = self.beta.to(self.device)
-        self.alpha = self.alpha.to(self.device)
-        self.alpha_bar = self.alpha_bar.to(self.device)
-        self.sqrt_alpha_bar = self.sqrt_alpha_bar.to(self.device)
-        self.sqrt_one_minus_alpha_bar = self.sqrt_one_minus_alpha_bar.to(
-            self.device
-        )
-
-    def _linear_beta_schedule(
-        self,
-        beta_start: float,
-        beta_end: float,
-        n_timesteps: int
-    ) -> torch.Tensor:
-        """生成线性 Beta 调度序列。"""
-        return torch.linspace(beta_start, beta_end, n_timesteps)
-
-    def _cosine_beta_schedule(
-        self,
-        n_timesteps: int,
-        s: float = 0.008
-    ) -> torch.Tensor:
-        """生成余弦 Beta 调度序列。"""
-        import math
-        steps = n_timesteps + 1
-        t = torch.linspace(0, n_timesteps, steps)
-        alpha_bar = torch.cos(((t / n_timesteps) + s) / (1 + s) * math.pi * 0.5) ** 2
-        alpha_bar = alpha_bar / alpha_bar[0]
-        beta = 1 - (alpha_bar[1:] / alpha_bar[:-1])
-        return torch.clip(beta, 0.0001, 0.9999)
-
-    def forward_sample(
-        self,
-        x_0: torch.Tensor,
-        t: torch.Tensor
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
-        前向加噪过程: x_0 -> x_t。
-
-        与 DDPM 的前向过程完全相同，使用重参数化技巧。
+        构造DDIM并预计算噪声调度与子序列时间步
 
         Args:
-            x_0 (torch.Tensor): 原始无噪声数据。
-                shape: (batch_size, channels, height, width)
-            t (torch.Tensor): 时间步索引（0 到 T-1）。
-                shape: (batch_size,)
+            timesteps:     训练总扩散步数T
+            beta_start:    噪声调度起始值
+            beta_end:      噪声调度终止值
+            beta_schedule: 调度策略，支持"linear"和"cosine"
+            eta:           随机性控制参数，0.0为完全确定性，1.0退化为DDPM
+            steps:         采样步数，可小于训练timesteps
+        """
+        super().__init__()
+        self.timesteps = timesteps
+        self.eta = eta
+        self.steps = steps
+
+        # 借助DDPM预计算噪声调度系数
+        _ddpm = DDPM(timesteps, beta_start, beta_end, beta_schedule)
+        self.register_buffer("alphas_cumprod", _ddpm.alphas_cumprod)
+        self.register_buffer("sqrt_alphas_cumprod", _ddpm.sqrt_alphas_cumprod)
+        self.register_buffer(
+            "sqrt_one_minus_alphas_cumprod", _ddpm.sqrt_one_minus_alphas_cumprod
+        )
+        self.register_buffer("betas", _ddpm.betas)
+
+        # 构建子序列时间步，均匀采样
+        self.time_steps = torch.linspace(0, timesteps - 1, steps, dtype=torch.long)
+
+    def forward_sample(self, x_0: torch.Tensor, t: int) -> torch.Tensor:
+        """
+        前向加噪：从x_0直接采样到x_t，逻辑与DDPM一致
+
+        Args:
+            x_0: 形状为 (B, C, H, W) 的原始数据
+            t:   目标时间步索引
 
         Returns:
-            Tuple[torch.Tensor, torch.Tensor]:
-                - x_t: 加噪后的数据。
-                - noise: 采样的标准高斯噪声。
+            形状与x_0相同的加噪数据x_t
         """
         noise = torch.randn_like(x_0)
-
-        sqrt_alpha_bar_t = self._extract_coefficients(
-            self.sqrt_alpha_bar, t, x_0.shape
-        )
-        sqrt_one_minus_alpha_bar_t = self._extract_coefficients(
-            self.sqrt_one_minus_alpha_bar, t, x_0.shape
-        )
-
-        x_t = sqrt_alpha_bar_t * x_0 + sqrt_one_minus_alpha_bar_t * noise
-
-        return x_t, noise
+        sqrt_alpha = self.sqrt_alphas_cumprod[t].clamp(max=1.0)
+        sqrt_one_minus_alpha = self.sqrt_one_minus_alphas_cumprod[t].clamp(max=1.0)
+        return sqrt_alpha * x_0 + sqrt_one_minus_alpha * noise
 
     def reverse_sample(
         self,
         x_t: torch.Tensor,
-        t: torch.Tensor,
-        condition: torch.Tensor,
+        t: int,
+        condition: Optional[torch.Tensor],
         model: nn.Module,
-        t_prev: Optional[torch.Tensor] = None
     ) -> torch.Tensor:
         """
-        单步反向去噪: x_t -> x_{t-1}（支持跳步）。
-
-        DDIM 反向过程公式（确定性，eta=0）：
-        x_{t-1} = √α_bar_{t-1} * (x_t - √(1-α_bar_t) * ε_θ) / √α_bar_t
-                  + √(1 - α_bar_{t-1} - σ_t^2) * ε_θ + σ_t * z
-
-        其中 σ_t = eta * √((1-α_bar_{t-1})/(1-α_bar_t)) * √(1-α_bar_t/α_bar_{t-1})
+        DDIM单步采样：从x_t预测x_{t-1}
 
         Args:
-            x_t (torch.Tensor): 当前时间步的带噪数据。
-                shape: (batch_size, channels, height, width)
-            t (torch.Tensor): 当前时间步索引。
-                shape: (batch_size,)
-            condition (torch.Tensor): 条件张量。
-            model (nn.Module): 噪声预测模型。
-            t_prev (Optional[torch.Tensor], optional): 前一个时间步索引。
-                如果为 None，则假设为 t-1（标准单步去噪）。
-                用于跳步采样时指定目标时间步。
+            x_t:       形状为 (B, C, H, W) 的当前带噪数据
+            t:         当前时间步索引
+            condition: 条件张量，为None时表示无条件生成
+            model:     噪声预测模型
 
         Returns:
-            torch.Tensor: 去噪后的数据 x_{t-1}。
+            形状与x_t相同的去噪结果x_{t-1}
         """
-        # 使用模型预测噪声
-        predicted_noise = model(x_t, t, condition)
+        batch_size = x_t.shape[0]
+        t_tensor = torch.full((batch_size,), t, device=x_t.device, dtype=torch.long)
+        predicted_noise = model(x_t, t_tensor, condition)
 
-        # 如果未指定前一个时间步，默认为 t-1
-        if t_prev is None:
-            t_prev = torch.clamp(t - 1, min=0)
+        alpha_t = self.alphas_cumprod[t]
+        sqrt_alpha_t = torch.sqrt(alpha_t.clamp(max=1.0))
+        sqrt_one_minus_alpha_t = torch.sqrt((1.0 - alpha_t).clamp(max=1.0))
 
-        # 提取当前和前一时间步的 alpha_bar
-        alpha_bar_t = self._extract_coefficients(self.alpha_bar, t, x_t.shape)
-        alpha_bar_t_prev = self._extract_coefficients(
-            self.alpha_bar, t_prev, x_t.shape
-        )
+        # 预测x_0
+        x_0_pred = (x_t - sqrt_one_minus_alpha_t * predicted_noise) / sqrt_alpha_t.clamp(min=1e-10)
+        x_0_pred = x_0_pred.clamp(-1.0, 1.0)
 
-        # 计算 σ_t（方差项）
-        sigma_t = (
+        # 计算前一时间步的系数
+        if t > 0:
+            alpha_t_prev = self.alphas_cumprod[t - 1]
+        else:
+            alpha_t_prev = x_t.new_tensor(1.0)
+
+        sqrt_alpha_t_prev = torch.sqrt(alpha_t_prev.clamp(max=1.0))
+
+        # 计算方向指向x_t的项
+        sigma = (
             self.eta
-            * torch.sqrt((1 - alpha_bar_t_prev) / (1 - alpha_bar_t))
-            * torch.sqrt(1 - alpha_bar_t / alpha_bar_t_prev)
+            * torch.sqrt(
+                (1.0 - alpha_t_prev) / (1.0 - alpha_t).clamp(min=1e-10)
+                * (1.0 - alpha_t / alpha_t_prev.clamp(min=1e-10))
+            )
         )
-
-        # 预测 x_0（数据预测）
-        predicted_x_0 = (
-            x_t - torch.sqrt(1 - alpha_bar_t) * predicted_noise
-        ) / torch.sqrt(alpha_bar_t)
-
-        # 计算方向指向 x_t 的部分
-        direction_pointing_to_x_t = torch.sqrt(
-            1 - alpha_bar_t_prev - sigma_t ** 2
-        ) * predicted_noise
+        dir_xt = torch.sqrt(1.0 - alpha_t_prev - sigma ** 2) * predicted_noise
 
         # 随机噪声项
-        noise = torch.randn_like(x_t)
-        # 当 t_prev == 0 时，不添加噪声
-        noise_mask = (t_prev > 0).float().view(-1, 1, 1, 1)
+        noise = torch.randn_like(x_t) if self.eta > 0 else torch.zeros_like(x_t)
 
-        # DDIM 反向采样公式
-        x_t_prev = (
-            torch.sqrt(alpha_bar_t_prev) * predicted_x_0
-            + direction_pointing_to_x_t
-            + noise_mask * sigma_t * noise
-        )
-
-        return x_t_prev
+        return sqrt_alpha_t_prev * x_0_pred + dir_xt + sigma * noise
 
     def reverse_sample_loop(
         self,
-        x_T: torch.Tensor,
-        condition: torch.Tensor,
+        shape: Tuple[int, ...],
+        condition: Optional[torch.Tensor],
         model: nn.Module,
-        skip_steps: Optional[int] = None
     ) -> torch.Tensor:
         """
-        完整反向采样循环: x_T -> x_0（支持跳步加速）。
+        完整反向采样循环：在子序列时间步上执行DDIM采样
 
         Args:
-            x_T (torch.Tensor): 初始纯高斯噪声。
-                shape: (batch_size, channels, height, width)
-            condition (torch.Tensor): 条件张量。
-            model (nn.Module): 噪声预测模型。
-            skip_steps (Optional[int], optional): 跳步采样的实际步数。
-                如果为 None，使用完整的 n_timesteps 步。
-                例如，skip_steps=50 表示从 1000 步跳到 50 步。
+            shape:     目标张量形状，如 (B, C, H, W)
+            condition: 条件张量，为None时表示无条件生成
+            model:     噪声预测模型
 
         Returns:
-            torch.Tensor: 生成的数据 x_0。
-
-        Example:
-            >>> # 标准采样（1000 步）
-            >>> x_0 = ddim.reverse_sample_loop(x_T, condition, model)
-            >>> # 加速采样（50 步）
-            >>> x_0_fast = ddim.reverse_sample_loop(x_T, condition, model, skip_steps=50)
+            形状为shape的生成样本
         """
-        # 生成时间步序列
-        if skip_steps is None:
-            # 使用全部时间步
-            timesteps = list(reversed(range(self.n_timesteps)))
-        else:
-            # 跳步采样：均匀选择 skip_steps 个时间步
-            timesteps = list(
-                np.linspace(0, self.n_timesteps - 1, skip_steps, dtype=int)
-            )
-            timesteps = list(reversed(timesteps))
+        # 从模型参数推断设备，模型无参数时默认使用cpu
+        try:
+            device = next(model.parameters()).device
+        except StopIteration:
+            device = torch.device("cpu")
+        x = torch.randn(shape, device=device)
 
-        x_t = x_T
+        time_steps_list = self.time_steps.tolist()
+        for i in reversed(range(len(time_steps_list))):
+            t = int(time_steps_list[i])
+            t_prev = int(time_steps_list[i - 1]) if i > 0 else 0
 
-        # 逐步去噪
-        for i, time_step in enumerate(timesteps):
-            # 创建当前时间步张量
-            t = torch.full(
-                (x_t.shape[0],),
-                time_step,
-                dtype=torch.long,
-                device=self.device
-            )
+            batch_size = x.shape[0]
+            t_tensor = torch.full((batch_size,), t, device=device, dtype=torch.long)
+            predicted_noise = model(x, t_tensor, condition)
 
-            # 特殊处理最后一步 (t=0)
-            if time_step == 0:
-                # 当 t=0 时，直接返回预测的 x_0
-                predicted_noise = model(x_t, t, condition)
-                alpha_bar_t = self._extract_coefficients(
-                    self.alpha_bar, t, x_t.shape
+            alpha_t = self.alphas_cumprod[t]
+            sqrt_alpha_t = torch.sqrt(alpha_t.clamp(max=1.0))
+            sqrt_one_minus_alpha_t = torch.sqrt((1.0 - alpha_t).clamp(max=1.0))
+
+            x_0_pred = (x - sqrt_one_minus_alpha_t * predicted_noise) / sqrt_alpha_t.clamp(min=1e-10)
+            x_0_pred = x_0_pred.clamp(-1.0, 1.0)
+
+            alpha_t_prev = self.alphas_cumprod[t_prev] if t_prev > 0 else x.new_tensor(1.0)
+            sqrt_alpha_t_prev = torch.sqrt(alpha_t_prev.clamp(max=1.0))
+
+            sigma = (
+                self.eta
+                * torch.sqrt(
+                    (1.0 - alpha_t_prev) / (1.0 - alpha_t).clamp(min=1e-10)
+                    * (1.0 - alpha_t / alpha_t_prev.clamp(min=1e-10))
                 )
-                # 计算 predicted_x_0
-                x_0 = (
-                    x_t - torch.sqrt(1 - alpha_bar_t) * predicted_noise
-                ) / torch.sqrt(alpha_bar_t)
-                return x_0
+            )
+            dir_xt = torch.sqrt((1.0 - alpha_t_prev - sigma ** 2).clamp(min=0.0)) * predicted_noise
+            noise = torch.randn_like(x) if self.eta > 0 else torch.zeros_like(x)
 
-            # 确定前一个时间步
-            if i < len(timesteps) - 1:
-                t_prev = torch.full(
-                    (x_t.shape[0],),
-                    timesteps[i + 1],
-                    dtype=torch.long,
-                    device=self.device
-                )
-            else:
-                # 理论上不应到达这里，因为上面已经处理了 t=0
-                t_prev = torch.zeros_like(t)
+            x = sqrt_alpha_t_prev * x_0_pred + dir_xt + sigma * noise
 
-            # 单步去噪
-            x_t = self.reverse_sample(x_t, t, condition, model, t_prev)
+        return x
 
-        return x_t
-
-    def _extract_coefficients(
-        self,
-        coefficients: torch.Tensor,
-        t: torch.Tensor,
-        target_shape: torch.Size
-    ) -> torch.Tensor:
-        """从系数序列中提取指定时间步的值并广播。"""
-        batch_size = t.shape[0]
-        extracted = coefficients.gather(-1, t)
-        return extracted.view(batch_size, *([1] * (len(target_shape) - 1)))
-
-
-# ============================================================================
-# 测试模块
-# ============================================================================
 
 if __name__ == "__main__":
-    # 设置 UTF-8 编码
-    import sys
-    import io
-    if sys.platform == 'win32':
-        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+    # 验证接口形状的轻量测试
+    class _DummyModel(nn.Module):
+        def forward(
+            self,
+            x_t: torch.Tensor,
+            t: torch.Tensor,
+            condition: Optional[torch.Tensor],
+        ) -> torch.Tensor:
+            return torch.randn_like(x_t)
 
-    # 导入 SimpleUNet
-    import os
-    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    from models.unet import SimpleUNet
-
-    print("=" * 70)
-    print("DDIM 算法测试")
-    print("=" * 70)
-
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"\n使用设备: {device}\n")
-
-    # 测试参数
-    batch_size = 4
-    in_channels = 1
-    out_channels = 1
-    height = 28
-    width = 28
-    n_timesteps = 1000
-    beta_start = 0.0001
-    beta_end = 0.02
-
-    print("-" * 70)
-    print("1. 初始化 DDIM（确定性采样，eta=0）")
-    print("-" * 70)
-
+    T = 1000
     ddim = DDIM(
-        n_timesteps=n_timesteps,
-        beta_start=beta_start,
-        beta_end=beta_end,
-        beta_schedule='linear',
-        eta=0.0,  # 确定性采样
-        device=str(device)
-    )
-    print(f"✅ DDIM 初始化成功")
-    print(f"   - 时间步数: {ddim.n_timesteps}")
-    print(f"   - Eta（随机性参数）: {ddim.eta}")
-    print(f"   - Beta 范围: [{ddim.beta[0].item():.6f}, "
-          f"{ddim.beta[-1].item():.6f}]\n")
-
-    print("-" * 70)
-    print("2. 测试前向加噪过程（与 DDPM 相同）")
-    print("-" * 70)
-
-    x_0 = torch.randn(batch_size, in_channels, height, width).to(device)
-    t = torch.randint(0, n_timesteps, (batch_size,)).to(device)
-
-    x_t, noise = ddim.forward_sample(x_0, t)
-
-    print(f"输入 x_0 形状: {x_0.shape}")
-    print(f"时间步 t: {t.cpu().numpy()}")
-    print(f"输出 x_t 形状: {x_t.shape}")
-    print(f"✅ 前向加噪测试通过！\n")
-
-    print("-" * 70)
-    print("3. 测试单步反向去噪（标准步长）")
-    print("-" * 70)
-
-    model = SimpleUNet(in_channels=in_channels, out_channels=out_channels).to(device)
-    condition = torch.randn(batch_size, in_channels, height, width).to(device)
-
-    with torch.no_grad():
-        x_t_minus_1 = ddim.reverse_sample(x_t, t, condition, model)
-
-    print(f"输入 x_t 形状: {x_t.shape}")
-    print(f"时间步 t: {t.cpu().numpy()}")
-    print(f"输出 x_{{t-1}} 形状: {x_t_minus_1.shape}")
-    print(f"✅ 单步反向去噪测试通过！\n")
-
-    print("-" * 70)
-    print("4. 测试跳步采样（1000 步 -> 50 步加速）")
-    print("-" * 70)
-
-    ddim_fast = DDIM(
-        n_timesteps=n_timesteps,
-        beta_start=beta_start,
-        beta_end=beta_end,
-        beta_schedule='linear',
+        timesteps=T,
+        beta_start=0.0001,
+        beta_end=0.02,
+        beta_schedule="linear",
         eta=0.0,
-        device=str(device)
+        steps=50,
     )
+    model = _DummyModel()
+    shape = (2, 3, 32, 32)
+    x_0 = torch.randn(shape)
+    condition = torch.tensor([0, 1])
 
-    x_T = torch.randn(batch_size, in_channels, height, width).to(device)
+    # 测试forward_sample
+    x_t = ddim.forward_sample(x_0, t=500)
+    assert x_t.shape == x_0.shape, f"forward_sample形状不匹配: {x_t.shape} vs {x_0.shape}"
+    print(f"[DDIM] forward_sample通过，x_t形状: {x_t.shape}")
 
-    print(f"开始跳步采样（从 {n_timesteps} 步跳到 50 步）...")
-    with torch.no_grad():
-        x_0_fast = ddim_fast.reverse_sample_loop(
-            x_T, condition, model, skip_steps=50
-        )
+    # 测试reverse_sample
+    x_prev = ddim.reverse_sample(x_t, t=500, condition=condition, model=model)
+    assert x_prev.shape == x_t.shape, f"reverse_sample形状不匹配: {x_prev.shape} vs {x_t.shape}"
+    print(f"[DDIM] reverse_sample通过，x_prev形状: {x_prev.shape}")
 
-    print(f"输入 x_T 形状: {x_T.shape}")
-    print(f"输出 x_0 形状: {x_0_fast.shape}")
-    print(f"✅ 跳步采样测试通过！（仅用 50 步完成采样）\n")
+    # 测试reverse_sample_loop
+    sample = ddim.reverse_sample_loop(shape, condition, model)
+    assert sample.shape == shape, f"reverse_sample_loop形状不匹配: {sample.shape} vs {shape}"
+    print(f"[DDIM] reverse_sample_loop通过，sample形状: {sample.shape}")
 
-    print("-" * 70)
-    print("5. 测试不同 eta 值的影响")
-    print("-" * 70)
-
-    # eta = 0（完全确定性）
-    ddim_deterministic = DDIM(
-        n_timesteps=100, beta_start=beta_start, beta_end=beta_end,
-        eta=0.0, device=str(device)
-    )
-    print(f"✅ eta=0.0 (确定性) DDIM 初始化成功")
-
-    # eta = 1（等价于 DDPM）
+    # 测试eta=1.0
     ddim_stochastic = DDIM(
-        n_timesteps=100, beta_start=beta_start, beta_end=beta_end,
-        eta=1.0, device=str(device)
+        timesteps=T,
+        beta_start=0.0001,
+        beta_end=0.02,
+        beta_schedule="linear",
+        eta=1.0,
+        steps=50,
     )
-    print(f"✅ eta=1.0 (完全随机，类似 DDPM) DDIM 初始化成功")
+    sample_stoch = ddim_stochastic.reverse_sample_loop(shape, condition, model)
+    assert sample_stoch.shape == shape
+    print("[DDIM] eta=1.0随机性采样通过")
 
-    # eta = 0.5（半确定性）
-    ddim_semi = DDIM(
-        n_timesteps=100, beta_start=beta_start, beta_end=beta_end,
-        eta=0.5, device=str(device)
+    # 测试cosine调度
+    ddim_cos = DDIM(
+        timesteps=T,
+        beta_start=0.0001,
+        beta_end=0.02,
+        beta_schedule="cosine",
+        eta=0.0,
+        steps=20,
     )
-    print(f"✅ eta=0.5 (半确定性) DDIM 初始化成功\n")
+    sample_cos = ddim_cos.reverse_sample_loop(shape, None, model)
+    assert sample_cos.shape == shape
+    print("[DDIM] cosine调度无条件采样通过")
 
-    print("-" * 70)
-    print("6. 对比确定性采样的可重复性")
-    print("-" * 70)
-
-    torch.manual_seed(42)
-    x_T_1 = torch.randn(1, in_channels, height, width).to(device)
-    cond_1 = torch.randn(1, in_channels, height, width).to(device)
-
-    with torch.no_grad():
-        result_1 = ddim_deterministic.reverse_sample_loop(
-            x_T_1.clone(), cond_1, model, skip_steps=20
-        )
-        result_2 = ddim_deterministic.reverse_sample_loop(
-            x_T_1.clone(), cond_1, model, skip_steps=20
-        )
-
-    difference = torch.abs(result_1 - result_2).max().item()
-    print(f"两次确定性采样的最大差异: {difference:.10f}")
-    if difference < 1e-5:
-        print(f"✅ 确定性采样可重复性测试通过！\n")
-    else:
-        print(f"⚠️  差异较大，可能存在随机性\n")
-
-    print("=" * 70)
-    print("DDIM 算法所有测试通过！✅")
-    print("=" * 70)
+    print("[DDIM] 全部接口形状验证通过")
