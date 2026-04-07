@@ -1,4 +1,4 @@
-<h1 align="center">善弈者谋势，不善者谋子<br/>基于 Zero-Config Code Flow 的 Claude Code 配置教程</h1>
+<h1 align="center">善弈者谋势，不善者谋子<br/>基于 Zero-Config Code Flow 的 Claude Code 配置使用教程</h1>
 
 ---
 
@@ -8,13 +8,23 @@
 
 <p style="text-indent: 0"><b>日期</b>：2026 年 4 月 6 日</p>
 
+---
+
+<p style="font-size: 20px; text-indent:0;"><b>目录</b></p>
+
+[toc]
+
+---
+
+<div STYLE="page-break-after: always"></div>
+
 ## 0. 阅读导航
 
 本教程面向希望以极低成本以 Windows 操作系统为例快速搭建 AI 编程环境的学生用户。根据读者需求，可以选择不同的阅读起点：
 
 - **如果希望完全理解作者的思考脉络**，建议完整阅读本教程
-- **如果仅仅需要快速配置 Claude Code 环境**，建议阅读 [安装 ZCF](#安装-ZCF) 部分内容
-- **如果已经成功配置 Claude Code 环境，但希望提高 AI 编程产出质量**，建议阅读 [常用指令教学](#常用指令教学) 和 [Prompt 工程演示](#Prompt-工程演示)部分内容
+- **如果仅仅需要快速配置 Claude Code 环境**，建议阅读 [使用 ZCF 安装 Claude Code](#ZCF) 部分内容
+- **如果已经成功配置 Claude Code 环境，但希望提高 AI 编程产出质量**，建议阅读后文中的 [常用指令教学](#command) 和作为实战演练的 [Prompt 工程演示](#Prompt) 部分内容
 
 ## 1. 背景介绍
 
@@ -26,11 +36,9 @@
 
 基于上述认知，作者于 2025 年 11 月发布初版教程，彼时以“What could a soul like that be capable of?”为引，承载着对 LLM 时代 AI 编程工具的浪漫想象。然而五个月过去，作者必须承认当初的乐观多少有些一厢情愿。这五个月里，以 Coding Plan 为代表的订阅制方案逐渐成熟，客观上降低了使用 Agent 工具的门槛。然而同一时期，[OpenClaw](https://openclaw.ai) 的现象级爆红和随之而来的安全问题，以一种直接的方式提醒了所有人：**AI 工具的能力上限，从来不仅取决于模型本身的性能，更取决于智能体的设计成熟度与使用者的工程规范意识**。在 AI 辅助编程时代，使用者面对的最小模块不再是一行或一块代码，而是整个功能单元或业务层级，AI 生成的代码不仅要“可运行”，更要“可维护”。“Vibe Coding”绝非良策，“Harness Engineering”方为正途，这正是作者更新本教程的核心动机。
 
-新版教程在保留安装配置流程的基础上，新增两章初版中被忽略的内容：[常用指令教学](#常用指令教学)和 [Prompt 工程演示](#Prompt-工程演示)。前者介绍 Claude Code 原生指令与 Superpowers 补充指令的使用方法，帮助读者快速上手；后者通过`diffusion_model_implementations`这一模块开发案例，系统讲解如何通过 Prompt 工程最大化 AI 编程产出质量，进而拓展 Claude Code 的能力边界。
+新版教程在保留安装配置流程的基础上，新增两章初版中被忽略的内容：[常用指令教学](#command) 和 [Prompt 工程演示](#Prompt)。前者介绍 Claude Code 原生指令与 Superpowers 补充指令的使用方法，帮助读者快速上手；后者通过`diffusion_model_implementations`这一模块开发案例，系统讲解如何通过 Prompt 工程最大化 AI 编程产出质量，进而拓展 Claude Code 的能力边界。
 
-## 2. 安装 ZCF
-
-<a id="安装-ZCF"></a>
+## 2. 使用 ZCF 安装 Claude Code<a id="ZCF"></a>
 
 ### 2.1 安装 Node.js 环境
 
@@ -42,29 +50,21 @@ npx zcf
 
 其中，npx 是 [Node.js](https://nodejs.org/zh-cn) 环境下的包执行工具，因此需要根据读者你的系统环境下载 Node.js 最新长期支持（Long Term Support，LTS）版本的安装包。
 
-<div style="text-align: center;">
-  <img src="figures/figure1.png" alt="Node.js 下载页面" width="70%"/>
-  <br />
-  <a href="https://nodejs.org/zh-cn/download">Node.js 下载页面链接：https://nodejs.org/zh-cn/download</a>
-</div>
+<div style="margin: 0 auto; text-align: center; width: 75%"><img src="figures/figure1.webp" />Node.js 下载页面链接：https://nodejs.org/zh-cn/download</div>
 
-下载完成后，双击安装包文件进行安装，Node.js 环境的安装过程较为简单，除了需要勾选“I accept the terms in the License Agreement”选项外，建议全部保持默认设置。
+下载完成后，双击安装包文件进行安装，Node.js 环境的安装过程较为简单，除了需要勾选`I accept the terms in the License Agreement`选项外，建议全部保持默认设置。
 
 其他系统和硬件架构安装步骤大同小异，在此不再赘述，如有需求可以自行搜索该软件环境的安装教程。
 
 ### 2.2 安装 Git Bash 终端
 
-尽管 ZCF 的安装并不依赖 Git 环境，但作者强烈建议 Windows 用户安装 Git Bash 终端。这是因为 Git Bash 终端内置了可移植操作系统接口（Portable Operating System Interface，POSIX）兼容环境，可以显著提升 Claude Code 性能的稳定性，同时也为日后的代码仓库版本管理提供了便利。因此，建议访问其官网下载最新版本的安装包。
+尽管 ZCF 的安装和 Claude Code 的运行并不依赖 Git 环境，但作者强烈建议 Windows 用户安装 Git Bash 终端。这是因为 Git Bash 终端内置了可移植操作系统接口（Portable Operating System Interface，POSIX）兼容环境，可以显著提升 Claude Code 性能的稳定性，同时也为日后的代码仓库版本管理提供了便利。因此，建议有项目管理需求的读者访问其官网下载最新版本的安装包。
 
-<div style="text-align: center;">
-  <img src="figures/figure2.png" alt="Git Bash 终端下载页面" width="70%"/>
-  <br />
-  <a href="https://git-scm.com/install/windows">Git Bash 终端下载页面链接：https://git-scm.com/install/windows</a>
-</div>
+<div style="margin: 0 auto; text-align: center; width: 75%"><img src="figures/figure2.webp" />Git Bash 终端下载页面链接：https://git-scm.com/install/windows</div>
 
-下载完成后，双击安装包文件进行安装，Git Bash 终端的安装过程同样简单，除了需要勾选“Add a Git Bash Profile to Windows Terminal”选项和“Use Visual Studio Code as Git's default editor”选项外，建议全部保持默认设置。
+下载完成后，双击安装包文件进行安装，Git Bash 终端的安装过程同样简单，除了需要勾选`Add a Git Bash Profile to Windows Terminal`选项和`Use Visual Studio Code as Git's default editor`选项外，建议全部保持默认设置。上述两个选项的启用依读者需求而定。
 
-需要说明的是，ZCF 和 Claude Code 完全支持原生 Windows PowerShell 终端，下文所有操作均以 PowerShell 终端为例，无需额外配置。如果读者偏好类 Unix 风格的终端，可以全程使用 Git Bash 终端执行命令，两者的使用方法和效果完全一致。
+> 需要说明的是，ZCF 和 Claude Code 完全支持原生 Windows PowerShell 终端，下文所有操作均以 PowerShell 终端为例，无需额外配置。如果读者偏好类 Unix 风格的终端，可以全程使用 Git Bash 终端执行命令，两者的使用方法和效果完全一致。
 
 ### 2.3 安装 ZCF 并执行完整初始化
 
@@ -80,11 +80,7 @@ npx zcf
 npx : 无法加载文件 C:\Program Files\nodejs\npx.ps1，因为在此系统上禁止运行脚本。有关详细信息，请参阅 https:/go.microsoft.com/fwlink/?LinkID=135170 中的 about_Execution_Policies。
 ```
 
-<div style="text-align: center;">
-  <img src="figures/figure3.png" alt="PowerShell 终端执行策略错误提示" width="70%"/>
-  <br />
-  PowerShell 终端执行策略错误提示
-</div>
+<div style="margin: 0 auto; text-align: center; width: 75%"><img src="figures/figure3.webp" />PowerShell 终端执行策略错误提示</div>
 
 这是因为在默认情况下，Windows PowerShell 终端禁止执行未签名的脚本文件，因此需要修改其执行策略：
 
@@ -94,13 +90,9 @@ Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
 
 修改执行策略后，重新打开 Windows PowerShell 终端，即可通过上文的命令成功安装 ZCF。
 
-<div style="text-align: center;">
-  <img src="figures/figure4.png" alt="ZCF 主页面" width="70%"/>
-  <br />
-  ZCF 主页面
-</div>
+<div style="margin: 0 auto; text-align: center; width: 75%"><img src="figures/figure4.webp" />ZCF 交互配置页面</div>
 
-安装 ZCF 后，需要执行完整初始化流程，在主页面中输入选项“1”并回车开始初始化，推荐具体设置如下：
+安装 ZCF 后，需要执行完整初始化流程，以为读者一键安装配置 Claude Code 及其增效工具，在主页面中输入选项“1”并回车开始初始化，推荐具体设置如下：
 
 - **选择 Claude Code 配置语言**：推荐“English”选项
 - **选择 AI 输出语言**：推荐“简体中文”选项
@@ -129,7 +121,7 @@ Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
 
 		// 7897 端口为 Clash Verge 的默认混合代理端口
 		// 如果读者使用其他网络代理工具，请根据实际情况修改端口号
-		// 如果你不知道这类工具，请忽略下面两行配置
+		// 如果你不知道这类工具，请忽略下面两行配置，随意配置将导致不可用
 		"HTTP_PROXY": "http://127.0.0.1:7897",
 		"HTTPS_PROXY": "http://127.0.0.1:7897"
 	},
@@ -148,12 +140,14 @@ Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
 
 - **禁用安装检查**：Claude Code 默认会在每次启动时执行安装检查并推荐新版安装方法，该信息容易挤占 CCometixLine 状态栏组件的显示空间。通过设置`DISABLE_INSTALLATION_CHECKS`环境变量即可禁用该检查。
 - **提高上下文自动压缩触发阈值**：Claude Code 默认在上下文使用率达到 70%时触发自动压缩，但该阈值并非适用于所有任务，可能导致上下文过早被压缩。通过设置`CLAUDE_AUTOCOMPACT_PCT_OVERRIDE`环境变量，可将触发阈值调整至更合适的水平。
-- **设置 HTTP 和 HTTPS 代理**：除浏览器外，Windows 操作系统中的绝大多数应用程序均不支持系统级代理设置，需要通过设置`HTTP_PROXY`和`HTTPS_PROXY`环境变量使 Claude Code 的网络请求能够正确通过代理服务器转发，这在后续安装 Superpowers 时将起到重要作用。如果读者已在系统环境变量中配置了 HTTP 和 HTTPS 代理，则无需重复设置。
-- **修改 CCometixLine 的 command**：此外，CCometixLine 状态栏组件在 Windows 操作系统下可能出现无法正常显示的问题，可通过修改`statusLine`配置项中的`command`字段为`ccline`加以解决。
+- **设置 HTTP 和 HTTPS 代理**：除浏览器外，Windows 操作系统中的绝大多数应用程序均不支持系统级代理设置，需要通过设置`HTTP_PROXY`和`HTTPS_PROXY`环境变量使 Claude Code 的网络请求能够正确通过代理服务器转发，这在后续安装 Superpowers 时将起到重要作用。如果读者已在系统环境变量中配置了 HTTP 和 HTTPS 代理，则无需重复设置，这是因为 Claude Code 遵守父进程终端配置好的系统代理环境变量。
+- **修改 CCometixLine 的 command**：此外，CCometixLine 状态栏组件在 Windows 操作系统下可能出现无法正常显示的问题。依据经验，可通过修改`statusLine`配置项中的`command`字段为`ccline`加以解决。
 
 ### 2.5 配置 CCR
 
-完成上述配置后，接下来的关键一步是配置 CCR，以摆脱 Anthropic 官方高昂的资费和地区政策的限制。过去半年里，以 Coding Plan 为代表的订阅制方案逐渐成熟，成为学生用户使用 Agent 工具的主流选择。这类方案成本远低于官方按量计费，不过需要注意的是，订阅制方案普遍存在使用数据被用于后续模型训练的问题。如果读者对此存在顾虑，也可以使用 API 密钥按量调用，但成本将显著增加。经过作者的实际测试和综合考量，按性价比从高到低筛选出以下四个平台，供读者权衡选用：
+完成上述配置后，接下来的关键一步是配置 CCR，以摆脱 Anthropic 官方高昂的资费和地区政策的限制。
+
+在过去半年里，以 Coding Plan 为代表的订阅制方案逐渐成熟，成为学生用户使用 Agent 工具的主流选择。这类方案成本远低于官方按量计费，不过需要注意的是，订阅制方案普遍存在使用数据被用于后续模型训练的问题。如果读者对此存在顾虑，也可以使用 API 密钥按量调用，但成本将显著增加。经过作者的实际测试和综合考量，按性价比从高到低筛选出以下四个平台，供读者权衡选用：
 
 - **[MiniMax](https://platform.minimaxi.com)**：
   1. 性价比最高的选择。主力模型 MiniMax M2.7 和 M2.5 参数量均为 230B-A10B，主推的 Plus 套餐仅 49 元/月（490 元/年），支持每 5 小时 1500 次模型调用，并提供极速版套餐选项以满足用户实时性需求，服务稳定性好。
@@ -167,7 +161,7 @@ Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
 
 - **[Kimi](https://platform.kimi.ai)**：
   1. 理论智能水平最高的选择。主力模型 Kimi K2.5 参数量达 1T-A32B，主推的 Allegretto 套餐为 199 元/月（1908 元/年），采用周度/月度限额机制，针对重度开发用户友好。模型原生支持多模态，无需额外调用 MCP 工具链即可完成视觉理解等任务，国内直连稳定。
-  2. 缺点在于价格最高，且模型尚未完全针对 Agent 系统进行优化，无法全面发挥性能潜力。
+  2. 缺点在于价格最高，且模型尚未完全针对 Agent 编码系统（即本文的主角 Claude Code 一类工具）进行优化，无法全面发挥性能潜力。
   3. **API Base URL：**`https://api.kimi.com/coding`。
 
 - **[云雾 API](https://yunwu.ai/register?aff=bxvJ)**：
@@ -183,19 +177,15 @@ Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
 npx zcf ccr
 ```
 
-<div style="text-align: center;">
-  <img src="figures/figure5.png" alt="CCR 管理页面" width="70%"/>
-  <br />
-  CCR 管理页面
-</div>
+<div style="margin: 0 auto; text-align: center; width: 75%"><img src="figures/figure5.webp" /></div>
+
+<p style="text-align: center;">CCR 管理页面</p>
 
 在 CCR 管理页面输入选项“2”并回车打开 CCR UI，注意首次打开 CCR UI 时需要使用登录密钥“sk-zcf-x-ccr”。
 
-<div style="text-align: center;">
-  <img src="figures/figure6.png" alt="CCR UI" width="70%"/>
-  <br />
-  CCR UI
-</div>
+<div style="margin: 0 auto; text-align: center; width: 75%"><img src="figures/figure6.webp" /></div>
+
+<p style="text-align: center;">CCR UI</p>
 
 #### 2.5.2 填写供应商
 
@@ -234,7 +224,7 @@ npx zcf ccr
 
 ### 2.6 安装 Superpowers
 
-前文提到，相比"Vibe Coding"，"Harness Engineering"才是更可靠的路径。[Superpowers](https://github.com/obra/superpowers) 就是一套践行这一理念的技能框架，它为 Claude Code 注入了一套完整的软件开发工作流，涵盖需求澄清、计划编写、测试驱动开发、代码审查等关键环节。与原生 Claude Code 相比，Superpowers 通过自动触发的技能约束，使 AI 代理在编码过程中自动遵循最佳工程实践，显著提升代码质量和可维护性。其详细功能与使用方法将在 [常用指令教学](#常用指令教学)中介绍。
+前文提到，相比"Vibe Coding"，"Harness Engineering"才是更可靠的路径。[Superpowers](https://github.com/obra/superpowers) 就是一套践行这一理念的技能框架，它为 Claude Code 注入了一套完整的软件开发工作流，涵盖需求澄清、计划编写、测试驱动开发、代码审查等关键环节。与原生 Claude Code 相比，Superpowers 通过自动触发的技能约束，使 AI 代理在编码过程中自动遵循最佳工程实践，显著提升代码质量和可维护性。其详细功能与使用方法将在 [常用指令教学](#command) 中介绍。
 
 安装完成后，在任意文件夹打开 Windows PowerShell 终端，输入以下命令启动 Claude Code：
 
@@ -250,9 +240,49 @@ claude
 /reload-plugins
 ```
 
-## 3. 常用指令教学
+### 2.7 与 IDE(s) 集成
 
-<a id="常用指令教学"></a>
+尽管智能体驱动的 AI 横空出世并飞速演化至今，传统集成开发环境（IDEs）或智能开发环境（AIDEs）依然被绝大多数有编码需求的读者所需要。本小节主要以最强大和流行的集成开发环境之一 VSCode 为例，详细讲解如何将安装好的 Claude Code 和你现有的 IDE 集成，获得效率与项目掌握的协同统一。
+
+#### 2.7.1 使用 IDE 集成终端运行 Claude Code
+
+既然 Claude Code 本身是一个 CLI（Command Line Interface，命令行接口）工具，而集成开发环境中，集成终端也是一个最基础的功能，那么将 Claude Code 按上文安装成功之后，我们只需要在 IDE 的集成终端中直接运行 `claude` 命令，就可以在终端所在目录开启 Claude Code 会话。需要注意的是，与在其他终端中直接使用一样，需要在运行前确保当前目录为项目根目录，并确保进入之前已经为 Claude Code 开启必要环境，这一点在下文的 [常用指令教学](#command) 会详细介绍。
+
+至于如何快速进入项目所在终端，读者可以在左侧文件资源管理器下，右键项目根目录下任意文件或空白位置并选择 “在集成终端中打开” 以直接开启位于项目根目录的终端。如下图演示的本文开发界面所示：
+
+<div style="margin: 0 auto; text-align: center; width: 88%"><img src="figures/code_in_integrated_terminal.webp" />在集成终端中使用 Claude Code</div>
+
+上述操作的效果是，在界面偏下位置使用终端和 Claude Code 交互，上方可以正常打开文件，编辑和审阅代码。
+
+值得注意的是，由于 Claude Code 对 VSCode 有一定的支持，你在打开的编辑器中选中的任何文字，都可以被 Claude Code 读取到并作为上下文提示词，你的选中会在 CCLine 的最右边，即终端的最右下角显示出来，形如：`⧉ 3 lines selected`。借助这个特性，你可以通过选中文字，快速便捷地将 Claude Code 的注意力指向你想让它关注的地方去。
+
+#### 2.7.2 使用 IDE 插件运行 Claude Code
+
+这也许是拥抱 Agent Coding 前，众多用户在 IDE 中享受 AI 带来的便捷的普遍方式。前文背景中所介绍的以 [Continue](https://www.continue.dev)、[Roo Code](https://www.continue.dev) 为代表的开源插件，大多都以 “面板”（Panel）的方式提供和用户的交互方式。
+
+为了让不熟悉终端的用户快速上手，或是让喜欢使用侧边面板布局的用户得以使用 Panel 运行 Claude Code，Anthropic 官方提供了 Claude Code for VS Code 官方插件，可以打开拓展管理页面（或按快捷键 `Ctrl+Shift+X`），搜索 `Claude Code for VS Code`，选择 Anthropic 官方提供的插件安装即可。
+
+安装后，有三种方式将 Claude 以 GUI 的形式集成到 IDE 中：
+
+1. 读者应该可以在左侧活动栏（即拓展图标所在的区域）看到 Claude 图标，点击即可在左侧面板侧边栏打开 Claude Code。
+2. 也可以在任意编辑窗口的右上角看到 Claude 图标，点击将默认并列打开新的编辑窗口，启动一个 Claude Code 图形会话。
+3. VSCode 还有 “辅助侧边栏的概念”，可以在 “查看 - 外观 - 辅助侧边栏” 中开启，或按 `Ctrl+Alt+B` 快捷键显示，该侧边栏收纳如 $\LaTeX$ 开发工具和 Copilot 等辅助编码工具。Claude Code 也应在此列中，选中即可打开 Claude Code 的图形插件界面。
+
+任意一种方式均优先使用本地环境安装的 Claude Code，并使用我们先前对 Claude Code 的配置。如下图所示：
+
+<div style="margin: 0 auto; text-align: center; width: 88%"><img src="figures/code_in_panel.webp" />利用插件调用 Claude Code</div>
+
+可以看到，我们先前使用 ZCF 和 Superpowers 所安装的斜杠命令或 Skills 都能正常工作，这证明我们在插件中调用的就是方才安装在本地的那个 Claude Code 实例，说明 VSCode 插件本质上是本地 Claude Code 实例的 GUI 封装，共享同一套配置文件和插件系统。
+
+总而言之，无论是横版上下布局还是纵向左右布局，读者都可以选择最适合自己开发习惯和视觉体验的方式进行灵活选用。
+
+#### 2.7.3 在 IDEs 中审阅 Claude Code 的修改
+
+无论是终端形式还是 GUI 形式，Claude Code 都会自动在合适情况下和 VSCode 本身交互。在进行一些重要修改的时候，Claude Code 将在代码编辑器窗口中打开一个代码对比（Diff）窗口并等待读者你的意见。该窗口左侧是原始代码，右侧是 Claude Code 的修改建议，发生改变的部分将以红绿高亮进行标记。如果你在审阅后同意修改，可以点击接受按钮，Claude Code 会将修改应用到你的项目中并继续进行下一步工作。
+
+说句题外话，如果你有使用 Git 版本控制工具来管理项目的优秀习惯，VSCode 自带的 Git 功能（插件）也是增强你对 AI 生成代码掌控程度的利器。在左侧活动栏的 “源代码管理功能中”，将可以使用 Git Diff 随时查看存储库（Repository）中代码修改。读者还可以随时提交或暂存目前的代码版本，以在出现问题的时候快速且方便地回溯代码仓库。总之，尽管 Git 版本控制和 Claude Code 开发项目并无直接关系，但却可以极大增强你对 AI 生成代码的掌控力。读者若有兴趣，可自行学习 VSCode 中的 Git 插件使用和 Git 版本控制工具本身。相信作为久负盛名的版本控制工具，Git 在 Agentic AI 时代仍然会是保障代码质量和开发效率的最基础工具之一。
+
+## 3. 常用指令教学<a id="command"></a>
 
 安装配置到此结束，接下来聊聊怎么用。本节以一个基于 Conda 环境管理的 Python 项目为例，走一遍 Claude Code 的日常操作：怎么进入项目、怎么规划开发、怎么管理上下文与对话。
 
@@ -300,7 +330,7 @@ Plan 模式是 Claude Code 内置的只读探索机制，通过`Shift+Tab`或`/p
 
 所以上下文管理不只是技术操作，更是一种工作习惯：你在上下文里留了什么，Claude Code 就”知道”什么；你怎么组织它，它就怎么理解你的项目。**会管上下文的人，哪怕只用朴素的自然语言，也能获得稳定的输出；不会管的，再好的工作流，跑着跑着也会跑偏。**
 
-下面介绍六条常用的上下文管理指令，按使用频率从高到低排列。
+下面介绍六条常用的上下文管理指令，按使用频率从高到低排列，旨在帮助读者快速学习和认识上下文管理技巧。
 
 #### 3.3.1 /compact
 
@@ -334,9 +364,11 @@ Claude Code 正在执行任务时，如果临时想到一个问题，不必等�
 
 > 典型场景：执行过程“卡住了”，问问他怎么了；产生了一个 plan，你有地方没看懂，但是不想干扰正常的规划-执行流程。
 
-## 4. Prompt 工程演示
+### 3.4 从 Tips 中学习更多进阶用法
 
-<a id="Prompt-工程演示"></a>
+读者在使用 Claude Code 的实践过程中，若留心终端界面往往会发现：如游戏的加载界面一般，一些小提示（Tips）会适时的出现在正在执行的任务中。如果你感兴趣，不妨试试提示给出的命令/操作/快捷键，或许能帮你发现一片新的天地。
+
+## 4. Prompt 工程演示<a id="Prompt"></a>
 
 ### 4.1 反思
 

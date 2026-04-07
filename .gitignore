@@ -6,3 +6,4 @@ docs/superpowers/
 
 # 忽略文件
 CLAUDE.md
+*.pdf
